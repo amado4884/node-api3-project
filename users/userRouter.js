@@ -4,13 +4,8 @@ const postDB = require("../posts/postDb");
 
 const router = express.Router();
 
-router.post("/", async (req, res) => {
+router.post("/", validateUser, async (req, res) => {
   const { name } = req.body;
-
-  if (!name)
-    return res.status(400).json({
-      errorMessage: "Please provide a name for this new user.",
-    });
 
   let user;
   try {
@@ -27,33 +22,11 @@ router.post("/", async (req, res) => {
   return res.status(201).json(insertedUser);
 });
 
-router.post("/:id/posts", async (req, res) => {
-  const { id } = req.params;
+router.post("/:id/posts", validateUserId, validatePost, async (req, res) => {
+  const { user } = req;
   const { text } = req.body;
 
-  if (!id)
-    return res.status(400).json({ errorMessage: "Please provide a user id." });
-
-  if (!text)
-    return res
-      .status(400)
-      .json({ errorMessage: "Please provide text for the post." });
-
-  let user;
-  try {
-    user = await db.getById(id);
-  } catch (err) {
-    return res
-      .status(404)
-      .json({ error: "The user information could not be retrieved." });
-  }
-
-  if (user.length === 0)
-    return res
-      .status(404)
-      .json({ message: "The user with the specified ID does not exist." });
-
-  const post = await postDB.insert({ text, user_id: id });
+  const post = await postDB.insert({ text, user_id: user.id });
 
   if (!post)
     return res
@@ -84,82 +57,37 @@ router.get("/:id", validateUserId, async (req, res) => {
   return res.status(200).json(user);
 });
 
-router.get("/:id/posts", async (req, res) => {
-  const { id } = req.params;
+router.get("/:id/posts", validateUserId, async (req, res) => {
+  const { user } = req;
 
-  if (!id)
-    return res.status(400).json({ errorMessage: "Please provide a valid ID." });
-
-  let user;
-  try {
-    user = await db.getById(id);
-  } catch (err) {
-    return res
-      .status(404)
-      .json({ error: "The post information could not be retrieved." });
-  }
-
-  if (user.length === 0)
-    return res
-      .status(404)
-      .json({ message: "The post with the specified ID does not exist." });
-
-  const posts = await db.getUserPosts(id);
+  const posts = await db.getUserPosts(user.id);
 
   return res.status(200).json(posts);
 });
 
-router.delete("/:id", async (req, res) => {
-  const { id } = req.params;
-
-  if (!id)
-    return res.status(400).json({ errorMessage: "Please provide a valid ID." });
-
-  const user = await db.findById(id);
-
-  if (user.length === 0)
-    return res
-      .status(404)
-      .json({ message: "The user with the specified ID does not exist." });
-
+router.delete("/:id", validateUserId, async (req, res) => {
+  const { user } = req;
   try {
-    await db.remove(id);
+    await db.remove(user.id);
   } catch (err) {
     console.log(err);
     return res.status(500).json({
-      message: `The user with the ID of ${id} could not be removed.`,
+      message: `The user with the ID of ${user.id} could not be removed.`,
     });
   }
 
   return res.status(200).json({
-    message: `The user with the ID of ${id} was successfully deleted.`,
+    message: `The user with the ID of ${user.id} was successfully deleted.`,
   });
 });
 
-router.put("/:id", async (req, res) => {
-  const { id } = req.params;
-  const { name } = req.body;
+router.put("/:id", validateUserId, validateUser, async (req, res) => {
+  const { user } = req;
 
-  if (!id)
-    return res.status(400).json({ errorMessage: "Please provide a valid ID." });
-
-  if (!name)
-    return res.status(400).json({
-      errorMessage: "Please provide name for the user.",
-    });
+  const newUser = { name: req.body.name };
 
   try {
-    await db.getById(id);
-  } catch (err) {
-    return res
-      .status(404)
-      .json({ message: "The post with the specified ID does not exist." });
-  }
-
-  const newUser = { name };
-
-  try {
-    await db.update(id, newUser);
+    await db.update(user.id, newUser);
   } catch (err) {
     console.log(err);
     return res
@@ -186,19 +114,37 @@ async function validateUserId(req, res, next) {
   try {
     user = await db.getById(id);
   } catch (err) {
-    return res.status(400).json({ error: "Invalid user id" });
+    return res
+      .status(500)
+      .json({ errorMessage: "Couldn't get user information" });
   }
+
+  if (!user) return res.status(400).json({ error: "Invalid user id" });
 
   req.user = user;
   next();
 }
 
 function validateUser(req, res, next) {
-  // do your magic!
+  const { name } = req.body;
+
+  if (!req.body) return res.status(400).json({ message: "missing user data" });
+
+  if (!name)
+    return res.status(400).json({ message: "missing required name field" });
+
+  next();
 }
 
 function validatePost(req, res, next) {
-  // do your magic!
+  const { text } = req.body;
+
+  if (!req.body) return res.status(400).json({ message: "missing post data" });
+
+  if (!text)
+    return res.status(400).json({ message: "missing required text field" });
+
+  next();
 }
 
 module.exports = router;
