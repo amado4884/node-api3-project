@@ -2,7 +2,9 @@ const express = require("express");
 const cors = require("cors");
 const users = require("./users/userRouter");
 const posts = require("./posts/postRouter");
-const PORT = 5000;
+const dotenv = require("dotenv");
+dotenv.config();
+const PORT = process.env.PORT || 5000;
 
 const logger = (req, res, next) => {
   console.log(`${req.method} - ${req.url} - ${Date.now()}`);
